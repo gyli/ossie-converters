@@ -94,6 +94,21 @@ class _UnsupportedMetricExpression(Exception):
     """An expression that cannot be represented without inventing MetricFlow semantics."""
 
 
+def _sub_metric_name(ratio_name: str, role: str, taken_names: Set[str]) -> str:
+    """Name a RATIO helper metric ``<ratio>_<role>``, adding a numeric suffix on collision.
+
+    MetricFlow rejects names containing a double underscore, so the separator is a single one.
+    The chosen name is added to *taken_names*.
+    """
+    name = f"{ratio_name}_{role}"
+    suffix = 2
+    while name in taken_names:
+        name = f"{ratio_name}_{role}_{suffix}"
+        suffix += 1
+    taken_names.add(name)
+    return name
+
+
 class OssieToMSIConverter:
     """Converts an Ossie Document into a PydanticSemanticManifest.
 
@@ -290,6 +305,8 @@ class OssieToMSIConverter:
     def _convert_metrics(self, ossie_sm: OssieSemanticModel) -> Tuple[List[PydanticMetric], List[ConverterIssue]]:
         metrics: List[PydanticMetric] = []
         issues: List[ConverterIssue] = []
+        # Reserve every Ossie metric name up front so a generated sub-metric never takes one.
+        taken_names = {metric.name for metric in ossie_sm.metrics or []}
         for metric in ossie_sm.metrics or []:
             dialect_expr = self._get_dialect_expression(metric.expression, sql_only=True)
             dialect = self._sql_dialect(dialect_expr.dialect) if dialect_expr is not None else None
@@ -306,6 +323,7 @@ class OssieToMSIConverter:
                         metric.description,
                         ossie_sm.datasets,
                         dialect,
+                        taken_names,
                     )
                 )
             except _UnresolvedRowCountDataset:
@@ -326,6 +344,7 @@ class OssieToMSIConverter:
         description: Optional[str],
         datasets: List[OssieDataset],
         dialect: str = "",
+        taken_names: Optional[Set[str]] = None,
     ) -> List[PydanticMetric]:
         """Return one or more PydanticMetric objects for the given Ossie expression.
 
@@ -378,10 +397,12 @@ class OssieToMSIConverter:
         ratio_result = _try_parse_ratio(expr_str, dialect)
         if ratio_result is not None:
             num_expr, den_expr = ratio_result
-            num_name = f"{name}__numerator"
-            den_name = f"{name}__denominator"
-            num_metrics = self._convert_metric(num_name, num_expr, None, datasets, dialect)
-            den_metrics = self._convert_metric(den_name, den_expr, None, datasets, dialect)
+            if taken_names is None:
+                taken_names = {name}
+            num_name = _sub_metric_name(name, "numerator", taken_names)
+            den_name = _sub_metric_name(name, "denominator", taken_names)
+            num_metrics = self._convert_metric(num_name, num_expr, None, datasets, dialect, taken_names)
+            den_metrics = self._convert_metric(den_name, den_expr, None, datasets, dialect, taken_names)
             ratio_metric = PydanticMetric(
                 name=name,
                 description=description,
