@@ -102,12 +102,17 @@ def _untranslatable(scope, kind, dialect, reason=None):
         f"Supply a '{DIALECT_DAX}' expression to convert it.",
     )
 
-# Apache Ossie temporal types that Power BI cannot represent faithfully. Power BI stores
+# Apache Ossie data types that Power BI cannot represent faithfully. Power BI stores
 # every temporal value as `dateTime`, so a time-of-day type gains a date part and a
-# timezone-aware type loses its offset.
-_LOSSY_TEMPORAL = {
+# timezone-aware type loses its offset. `Decimal` maps to Fixed Decimal Number, which
+# keeps only 4 digits after the decimal point.
+_LOSSY_DATATYPES = {
     "Time": "Power BI has no time-only data type; stored as dateTime with a date part",
     "DateTimeTz": "Power BI has no timezone-aware data type; the UTC offset is lost",
+    "Decimal": (
+        "exported as Fixed Decimal Number, which keeps 4 decimal places; values with "
+        "more are rounded, and averages and ratios over them are computed to 4 places"
+    ),
 }
 
 DIRECT_LAKE_COMPATIBILITY_LEVEL = 1702
@@ -686,8 +691,8 @@ def _map_datatype(datatype, scope):
     if tmsl_type is None:
         warn(scope, f"unrecognized Apache Ossie data type '{datatype}'; left unspecified")
         return None
-    if datatype in _LOSSY_TEMPORAL:
-        warn(scope, _LOSSY_TEMPORAL[datatype])
+    if datatype in _LOSSY_DATATYPES:
+        warn(scope, _LOSSY_DATATYPES[datatype])
     return tmsl_type
 
 
