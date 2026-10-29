@@ -39,6 +39,7 @@ from ossie import (
     OssieDialect,
     OssieDocument,
     OssieExpression,
+    OssieMetric,
     OssieSemanticModel,
 )
 from ossie_wisdom.converter_issues import ConverterIssue, ConverterIssueType, ConverterResult
@@ -138,6 +139,8 @@ class OssieToWisdomConverter:
             elements.append((dataset.name, dataset.custom_extensions))
             for field in dataset.fields or []:
                 elements.append((f"{dataset.name}.{field.name}", field.custom_extensions))
+            for metric in dataset.metrics or []:
+                elements.append((f"{dataset.name}.{metric.name}", metric.custom_extensions))
         for relationship in model.relationships or []:
             elements.append((relationship.name, relationship.custom_extensions))
         for metric in model.metrics or []:
@@ -319,14 +322,30 @@ class OssieToWisdomConverter:
             expression = self._pick_expression(
                 metric.expression, dataset_dialects[dataset_name], metric.name, issues
             )
-            ref = {"uuid": _stable_id("ET_ZSHEET", dataset_name), "name": dataset_name}
-            measure: dict = {"name": metric.name, "expression": expression}
-            if metric.description:
-                measure["description"] = metric.description
-            measure["location"] = {"name": metric.name, "zsheetRef": ref}
-            measure["id"] = _stable_id("MEASURE", f"{dataset_name}.{metric.name}")
-            measures.setdefault(dataset_name, []).append(measure)
+            measures.setdefault(dataset_name, []).append(self._measure(metric, dataset_name, expression))
+        # A dataset-scoped metric belongs to its own dataset and references that
+        # dataset's fields by single-part name, so it needs no placement.
+        for dataset in model.datasets:
+            for metric in dataset.metrics or []:
+                element_name = f"{dataset.name}.{metric.name}"
+                if metric.ai_context is not None:
+                    issues.append(
+                        ConverterIssue(issue_type=ConverterIssueType.AI_CONTEXT_DROPPED, element_name=element_name)
+                    )
+                expression = self._pick_expression(
+                    metric.expression, dataset_dialects[dataset.name], element_name, issues
+                )
+                measures.setdefault(dataset.name, []).append(self._measure(metric, dataset.name, expression))
         return measures
+
+    def _measure(self, metric: OssieMetric, dataset_name: str, expression: str) -> dict:
+        ref = {"uuid": _stable_id("ET_ZSHEET", dataset_name), "name": dataset_name}
+        measure: dict = {"name": metric.name, "expression": expression}
+        if metric.description:
+            measure["description"] = metric.description
+        measure["location"] = {"name": metric.name, "zsheetRef": ref}
+        measure["id"] = _stable_id("MEASURE", f"{dataset_name}.{metric.name}")
+        return measure
 
     def _find_referenced_dataset(self, expression: str, dataset_names: List[str]) -> Optional[str]:
         best: Optional[str] = None

@@ -99,6 +99,8 @@ are stable:
   compound `AND` join conditions.
 - Metrics attach to the first dataset their expression references (a
   `METRIC_TABLE_UNRESOLVED` warning falls back to the first dataset).
+  Dataset-scoped metrics (`datasets[].metrics`) become measures of their own
+  dataset's table, with their expression as written.
 - Connections are per-dialect placeholders (`et-connection-snowflake`, ...) expected to be
   remapped when the domain is imported; all IDs are derived deterministically from names,
   so re-runs produce identical output.
