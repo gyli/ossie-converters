@@ -288,11 +288,22 @@ def _convert_to_fact(field_def: dict[str, Any], dataset_id: str) -> GdFact:
     )
 
 
+# Portable dialects, in order of preference. OSSIE_SQL_2026 is the spec's own
+# portable expression language and parses the same as ANSI_SQL, so it is read
+# wherever ANSI_SQL is.
+_PORTABLE_DIALECTS = ("ANSI_SQL", "OSSIE_SQL_2026")
+
+
 def _get_source_column(field_def: dict[str, Any]) -> str:
-    """Extract the source column name from an Ossie field's ANSI_SQL expression."""
-    for dialect_expr in field_def.get("expression", {}).get("dialects", []):
-        if dialect_expr.get("dialect") == "ANSI_SQL":
-            return dialect_expr["expression"]
+    """Extract the source column name from an Ossie field's portable SQL expression.
+
+    Reads ``ANSI_SQL``, then ``OSSIE_SQL_2026``; a field with neither uses its own name.
+    """
+    dialects = field_def.get("expression", {}).get("dialects", [])
+    for dialect in _PORTABLE_DIALECTS:
+        for dialect_expr in dialects:
+            if dialect_expr.get("dialect") == dialect:
+                return dialect_expr["expression"]
     return field_def["name"]
 
 
