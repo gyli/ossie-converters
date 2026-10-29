@@ -59,8 +59,9 @@ from ossie_ontology.model import Dataset, DatasetField
 from ossie_relationalai.mappings import ConditionValue
 
 # RelationalAI reads its tables from Snowflake, so a field written in that
-# dialect is read in it, and in ANSI SQL otherwise.
-DIALECTS = ("SNOWFLAKE", "ANSI_SQL")
+# dialect is read in it, and in portable SQL otherwise: ANSI SQL, or
+# OSSIE_SQL_2026, the spec's own portable dialect, which parses the same.
+DIALECTS = ("SNOWFLAKE", "ANSI_SQL", "OSSIE_SQL_2026")
 
 _OPERATORS: dict[SqlOp, Callable[[Any, Any], Any]] = {
     SqlOp.PLUS: operator.add,
