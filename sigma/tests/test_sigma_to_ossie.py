@@ -48,7 +48,7 @@ def test_basic_datasets_fields_relationships_metrics():
         'IfNull([Amount], 0) - SumIf([Amount], [Status] = "refunded")'
     )
     assert net_dialects[OssieDialect.ANSI_SQL] == (
-        'COALESCE("Amount", 0) - SUM(CASE WHEN "Status" = \'refunded\' THEN "Amount" ELSE 0 END)'
+        'COALESCE("Amount", 0) - SUM(CASE WHEN "Status" = \'refunded\' THEN "Amount" END)'
     )
 
     assert model.description == "Orders and the customers who placed them"
