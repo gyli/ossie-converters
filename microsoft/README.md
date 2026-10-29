@@ -276,6 +276,9 @@ Consequences worth knowing:
   follows an hour token, which is why minutes are written `n`.
 - **`Time` and `DateTimeTz` do not survive export.** They collapse onto `dateTime`,
   gaining a date part or losing a UTC offset respectively. Both cases are reported.
+- **`Decimal` keeps 4 decimal places on export.** It becomes "Fixed Decimal Number", so
+  stored values with more decimals are rounded, and averages and ratios over the column
+  are computed to 4 places. Every exported `Decimal` field is reported.
 - **`double` is not `Decimal`.** Mapping Power BI's approximate "Decimal Number" onto an
   exact decimal type would overstate its precision.
 - Values outside years 1900–9999 are outside the Power BI `dateTime` range, and time is
