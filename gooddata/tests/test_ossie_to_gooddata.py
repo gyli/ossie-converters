@@ -480,6 +480,40 @@ def test_source_column_from_ansi_sql(ossie_tpcds_dict: dict):
     assert "c_first_name" in source_cols
 
 
+@pytest.mark.parametrize(
+    "dialects",
+    [
+        [{"dialect": "OSSIE_SQL_2026", "expression": "customer_id"}],
+        [
+            {"dialect": "SNOWFLAKE", "expression": "customer_id::VARCHAR"},
+            {"dialect": "OSSIE_SQL_2026", "expression": "customer_id"},
+        ],
+    ],
+    ids=["ossie-sql-only", "vendor-dialect-first"],
+)
+@pytest.mark.parametrize("convert", [_convert_to_attribute, _convert_to_fact], ids=["attribute", "fact"])
+def test_source_column_from_ossie_sql(dialects: list[dict], convert):
+    """OSSIE_SQL_2026 is the spec's portable dialect, so a field written in it
+    maps to its column, not to the field's own name."""
+    field = {"name": "customer_key", "expression": {"dialects": dialects}}
+
+    assert convert(field, "customers").source_column == "customer_id"
+
+
+def test_source_column_prefers_ansi_sql_over_ossie_sql():
+    field = {
+        "name": "customer_key",
+        "expression": {
+            "dialects": [
+                {"dialect": "OSSIE_SQL_2026", "expression": "ossie_column"},
+                {"dialect": "ANSI_SQL", "expression": "ansi_column"},
+            ]
+        },
+    }
+
+    assert _convert_to_attribute(field, "customers").source_column == "ansi_column"
+
+
 def test_data_source_table_id(ossie_tpcds_dict: dict):
     """Verify source string is parsed into dataSourceTableId."""
     result = ossie_to_gooddata(ossie_tpcds_dict, data_source_id="tpcds")
