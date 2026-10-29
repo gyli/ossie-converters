@@ -306,7 +306,7 @@ def _convert_view(vname, view, meta):
         ds["ai_context"] = {"instructions": view["ai_context"]}
 
     fields = []
-    pk_cols = []
+    pk_fields = []
     # Omni writes compound-key entries as `${view.field}`/`${field}` references;
     # resolve same-view references to plain field names (the original list is
     # stashed whenever this normalization changes it).
@@ -340,10 +340,10 @@ def _convert_view(vname, view, meta):
         field, col = _convert_dimension(vname, dname, dim)
         fields.append(field)
         covered.update((dname, col))
+        # Keys name fields of the dataset, not source columns (core spec,
+        # Name Resolution); the Ossie field is named after the dimension.
         if dim.get("primary_key"):
-            pk_cols.append(col)
-        if dname in compound:
-            compound = [col if c == dname else c for c in compound]
+            pk_fields.append(dname)
     if fields:
         ds["fields"] = fields
 
@@ -361,14 +361,14 @@ def _convert_view(vname, view, meta):
             _warn(scope, f"custom_compound_primary_key_sql entries {unknown} are not "
                          f"plain field names; using them as-is in primary_key")
         ds["primary_key"] = [str(c) for c in compound]
-        if pk_cols:
+        if pk_fields:
             _warn(scope, "both a primary_key dimension and "
                          "custom_compound_primary_key_sql found; using the compound key")
-    elif len(pk_cols) == 1:
-        ds["primary_key"] = pk_cols
-    elif len(pk_cols) > 1:
+    elif len(pk_fields) == 1:
+        ds["primary_key"] = pk_fields
+    elif len(pk_fields) > 1:
         # Multiple primary_key dimensions form a composite key in Omni.
-        ds["primary_key"] = pk_cols
+        ds["primary_key"] = pk_fields
 
     if fname != view_file(vname):
         stash["file"] = fname
@@ -470,12 +470,15 @@ def _convert_relationship(entry, index, views):
                         f"relationship form; preserved in custom_extensions only")
             return None
         la, lf, ra, rf = m.groups()
+        # from_columns/to_columns name fields of each dataset, not source
+        # columns (core spec, Name Resolution); a ${view.field} reference
+        # already names the field.
         if aliases.get(la) == from_view and aliases.get(ra) == to_view:
-            from_cols.append(_field_column(views[from_view], lf))
-            to_cols.append(_field_column(views[to_view], rf))
+            from_cols.append(lf)
+            to_cols.append(rf)
         elif aliases.get(la) == to_view and aliases.get(ra) == from_view:
-            from_cols.append(_field_column(views[from_view], rf))
-            to_cols.append(_field_column(views[to_view], lf))
+            from_cols.append(rf)
+            to_cols.append(lf)
         else:
             _warn(what, f"on_sql clause '{clause.strip()}' references views other "
                         f"than '{from_view}'/'{to_view}' (or their aliases); "
@@ -524,16 +527,6 @@ def _convert_relationship(entry, index, views):
             stash[key] = entry[key]
     write_stash(rel, stash)
     return rel
-
-
-def _field_column(view, fname):
-    """Resolve a ${view.field} reference to the field's underlying column when the
-    dimension is a bare column, else keep the field name."""
-    dim = (view.get("dimensions") or {}).get(fname) or {}
-    sql = dim.get("sql")
-    if sql is None:
-        return fname
-    return sql.strip() if is_simple_identifier(str(sql)) else fname
 
 
 def _convert_measures(views, relationships, base_view):

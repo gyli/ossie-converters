@@ -161,6 +161,28 @@ def test_single_primary_key_marks_dimension():
         "primary_key"] is True
 
 
+def test_primary_key_names_a_field_before_a_column():
+    # Field `previous_id` reads column `order_id`, and field `order_id` reads
+    # column `order_key`. A key names a field (core spec, Name Resolution), so
+    # `primary_key: [order_id]` marks the `order_id` dimension.
+    files = export(minimal(datasets=[
+        {"name": "orders", "source": "db.sch.orders", "primary_key": ["order_id"],
+         "fields": [_field("previous_id", "order_id"), _field("order_id", "order_key")]}]))
+    dims = parse(files["views/orders.view.yaml"])["dimensions"]
+    assert dims["order_id"]["primary_key"] is True
+    assert "primary_key" not in dims["previous_id"]
+
+
+def test_primary_key_naming_a_column_is_still_accepted():
+    # Documents written by earlier imports name the column a field reads.
+    files = export(minimal(datasets=[
+        {"name": "orders", "source": "db.sch.orders", "primary_key": ["order_key"],
+         "fields": [_field("order_id", "order_key")]}]))
+    dims = parse(files["views/orders.view.yaml"])["dimensions"]
+    assert dims["order_id"]["primary_key"] is True
+    assert set(dims) == {"order_id"}
+
+
 def test_composite_primary_key_uses_compound_key():
     files = export(minimal(datasets=[
         {"name": "orders", "source": "db.sch.orders",
