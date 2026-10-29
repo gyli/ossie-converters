@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import sqlite3
+
 import pytest
 
 from ossie_sigma.sigma_formula import (
@@ -49,11 +51,11 @@ from ossie_sigma.sigma_formula import (
         ("[Qty] * [Price] + 1", "T", '"Qty" * "Price" + 1'),
         ("([Qty] + 1) * [Price]", "T", '("Qty" + 1) * "Price"'),
         ("Median([Amount])", "T", 'PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY "Amount")'),
-        ('SumIf([Amount], [Status] = "won")', "T", "SUM(CASE WHEN \"Status\" = 'won' THEN \"Amount\" ELSE 0 END)"),
+        ('SumIf([Amount], [Status] = "won")', "T", "SUM(CASE WHEN \"Status\" = 'won' THEN \"Amount\" END)"),
         (
             'SumIf([Amount], [Status] = "won", [Qty] > 0)',
             "T",
-            "SUM(CASE WHEN \"Status\" = 'won' AND \"Qty\" > 0 THEN \"Amount\" ELSE 0 END)",
+            "SUM(CASE WHEN \"Status\" = 'won' AND \"Qty\" > 0 THEN \"Amount\" END)",
         ),
         ('AvgIf([Amount], [Status] = "won")', "T", "AVG(CASE WHEN \"Status\" = 'won' THEN \"Amount\" END)"),
         (
@@ -112,6 +114,23 @@ from ossie_sigma.sigma_formula import (
 def test_translatable_formulas(formula, dataset_alias, expected_sql):
     node = parse_formula(formula)
     assert to_ansi_sql(node, dataset_alias=dataset_alias) == expected_sql
+
+
+def test_sumif_matches_sum_filter_where_including_when_nothing_matches():
+    """SumIf is a filtered sum, so it must agree with Ossie's portable
+    SUM(x) FILTER (WHERE c): NULL for a group where no row matches, not 0."""
+    sql = to_ansi_sql(parse_formula('SumIf([Amount], [Status] = "won")'), dataset_alias="T")
+    connection = sqlite3.connect(":memory:")
+    connection.execute('CREATE TABLE t ("Region" TEXT, "Status" TEXT, "Amount" INTEGER)')
+    connection.executemany(
+        "INSERT INTO t VALUES (?, ?, ?)",
+        [("east", "won", 5), ("east", "lost", 7), ("west", "lost", 3)],
+    )
+    rows = connection.execute(
+        f'SELECT "Region", {sql}, SUM("Amount") FILTER (WHERE "Status" = \'won\') '
+        'FROM t GROUP BY "Region" ORDER BY "Region"'
+    ).fetchall()
+    assert rows == [("east", 5, 5), ("west", None, None)]
 
 
 def test_renders_to_a_warehouse_dialect_from_the_same_tree():
