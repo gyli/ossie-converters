@@ -421,3 +421,47 @@ class TestRenamedFieldsDifferingOnlyByCase:
             "upper": 'Orders."Amount" * 2',
             "lower": 'Orders."amount" * 2',
         }
+
+
+class TestFieldCodeDialect:
+    """A field's column code is its most preferred SQL expression, as for metrics.
+
+    An ANSI_SQL expression equal to the field name is the most common field
+    shape. It must not be replaced by a vendor or non-SQL dialect listed first.
+    """
+
+    @staticmethod
+    def _code(*dialects: tuple[str, str]) -> str:
+        ossie = {
+            "version": "0.2.0",
+            "name": "m",
+            "datasets": [
+                {
+                    "name": "orders",
+                    "source": "db.orders",
+                    "fields": [
+                        {
+                            "name": "region",
+                            "expression": {
+                                "dialects": [{"dialect": d, "expression": e} for d, e in dialects]
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+        converter = conv.OssietoOBML(ossie)
+        obml = converter.convert()
+        return obml["dataObjects"]["orders"]["columns"]["region"]["code"]
+
+    def test_ansi_sql_equal_to_the_name_beats_a_vendor_dialect(self) -> None:
+        assert self._code(("SNOWFLAKE", "REGION::VARCHAR"), ("ANSI_SQL", "region")) == "region"
+
+    def test_ansi_sql_equal_to_the_name_beats_a_non_sql_dialect(self) -> None:
+        assert self._code(("TABLEAU", "[Region]"), ("ANSI_SQL", "region")) == "region"
+
+    def test_ossie_sql_beats_a_non_sql_dialect(self) -> None:
+        assert self._code(("TABLEAU", "[Region]"), ("OSSIE_SQL_2026", "region_code")) == "region_code"
+
+    def test_no_sql_dialect_falls_back_to_the_first_listed(self) -> None:
+        assert self._code(("TABLEAU", "[Region]"), ("MDX", "[Orders].[Region]")) == "[Region]"
