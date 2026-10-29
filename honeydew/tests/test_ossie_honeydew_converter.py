@@ -252,6 +252,24 @@ def test_pick_ansi_expression_fallback_warns():
     assert any("ANSI_SQL" in str(x.message) for x in w)
 
 
+def test_pick_ansi_expression_prefers_ossie_sql_over_a_vendor_dialect():
+    expr = {"dialects": [
+        {"dialect": "SNOWFLAKE", "expression": "col::VARCHAR"},
+        {"dialect": "OSSIE_SQL_2026", "expression": "col"},
+    ]}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert _pick_ansi_expression(expr, "f") == "col"
+
+
+def test_pick_ansi_expression_prefers_ansi_sql_over_ossie_sql():
+    expr = {"dialects": [
+        {"dialect": "OSSIE_SQL_2026", "expression": "ossie_col"},
+        {"dialect": "ANSI_SQL", "expression": "ansi_col"},
+    ]}
+    assert _pick_ansi_expression(expr, "f") == "ansi_col"
+
+
 @pytest.mark.parametrize("expression", [None, {"dialects": []}])
 def test_pick_ansi_expression_returns_none(expression):
     assert _pick_ansi_expression(expression, "f") is None
@@ -621,6 +639,37 @@ def test_ossie_to_honeydew_file_content(model, path, expected):
     files = convert_ossie_to_honeydew(_ossie(model))
     assert path in files
     assert yaml.safe_load(files[path]) == expected
+
+
+def test_ossie_to_honeydew_exports_ossie_sql_not_the_vendor_expression():
+    def portable(snowflake_expr, ossie_expr):
+        return {"dialects": [
+            {"dialect": "SNOWFLAKE", "expression": snowflake_expr},
+            {"dialect": "OSSIE_SQL_2026", "expression": ossie_expr},
+        ]}
+
+    model = {"name": "m",
+        "datasets": [
+            {"name": "orders", "source": "db.s.orders", "fields": []},
+            {"name": "customers", "source": "db.s.customers", "fields": [
+                {"name": "amount", "expression": portable("amount_sf::NUMBER", "amount")},
+                {"name": "region", "dimension": {"is_time": False},
+                 "expression": portable("UPPER(region_sf)", "UPPER(region)")},
+            ]},
+        ],
+        "metrics": [{"name": "revenue", "expression": portable("SUM(sf_only)", "SUM(customers.amount)")}]}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        files = convert_ossie_to_honeydew(_ossie(model))
+
+    # The metric is placed by its portable expression, not on the first entity.
+    metric = yaml.safe_load(files["schema/customers/metrics/revenue.yml"])
+    assert metric["sql"] == "SUM(customers.amount)"
+    assert "schema/orders/metrics/revenue.yml" not in files
+    exported = "".join(files.values())
+    assert "amount_sf" not in exported
+    assert "region_sf" not in exported
+    assert "sf_only" not in exported
 
 
 def test_ossie_to_honeydew_metric_entity_hint_overrides_expression():

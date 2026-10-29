@@ -424,8 +424,26 @@ def _ossie_relation_to_honeydew(rel: dict[str, Any]) -> dict[str, Any] | None:
     return honeydew_rel
 
 
+# Portable dialects, in order of preference. OSSIE_SQL_2026 is the spec's own portable
+# expression language and parses the same as ANSI_SQL, so it is accepted wherever
+# ANSI_SQL is, ahead of any vendor dialect.
+_PORTABLE_DIALECTS = ("ANSI_SQL", "OSSIE_SQL_2026")
+
+
+def _portable_expression(dialects: list[dict[str, Any]]) -> str | None:
+    """Return the expression in the most preferred portable dialect, if any."""
+    by_dialect: dict[str, Any] = {}
+    for d in dialects:
+        if d.get("expression") is not None:
+            by_dialect.setdefault((d.get("dialect") or "").upper(), d["expression"])
+    for dialect in _PORTABLE_DIALECTS:
+        if dialect in by_dialect:
+            return by_dialect[dialect]
+    return None
+
+
 def _pick_ansi_expression(expression: Any, field_name: str) -> str | None:
-    """Select the ANSI_SQL expression; fall back to first available dialect."""
+    """Select a portable (ANSI_SQL or OSSIE_SQL_2026) expression; fall back to the first available dialect."""
     if expression is None:
         return None
     if not isinstance(expression, dict):
@@ -435,22 +453,15 @@ def _pick_ansi_expression(expression: Any, field_name: str) -> str | None:
     if not dialects:
         return None
 
-    ansi_expr = None
-    first_expr = None
+    portable_expr = _portable_expression(dialects)
+    if portable_expr is not None:
+        return portable_expr
 
-    for d in dialects:
-        dialect = (d.get("dialect") or "").upper()
-        expr = d.get("expression")
-        if first_expr is None:
-            first_expr = expr
-        if dialect == "ANSI_SQL" and ansi_expr is None:
-            ansi_expr = expr
-
-    if ansi_expr is not None:
-        return ansi_expr
-
+    first_expr = next((d.get("expression") for d in dialects if d.get("expression") is not None), None)
     if first_expr is not None:
-        warnings.warn(f"'{field_name}': no ANSI_SQL dialect found; using first available")
+        warnings.warn(
+            f"'{field_name}': no ANSI_SQL or OSSIE_SQL_2026 dialect found; using first available"
+        )
         return first_expr
 
     return None
@@ -500,7 +511,7 @@ def _assign_metrics_to_entities(
 
     Priority:
     1. HONEYDEW ``custom_extension`` entity hint (preserves round-trip placement)
-    2. First ``entity.column`` pattern in the ANSI_SQL expression
+    2. First ``entity.column`` pattern in the portable (ANSI_SQL or OSSIE_SQL_2026) expression
     3. First entity in the model (with a warning)
     """
     entity_set = set(entity_names)
@@ -518,11 +529,7 @@ def _assign_metrics_to_entities(
         # Priority 2: expression scan
         expr_dict = metric.get("expression") or {}
         dialects = expr_dict.get("dialects") or [] if isinstance(expr_dict, dict) else []
-        expr_str = ""
-        for d in dialects:
-            if (d.get("dialect") or "").upper() == "ANSI_SQL":
-                expr_str = d.get("expression") or ""
-                break
+        expr_str = _portable_expression(dialects) or ""
         if not expr_str and dialects:
             expr_str = dialects[0].get("expression") or ""
 
