@@ -87,7 +87,8 @@ is what mappings call the field, the expression is what it reads. A field
 `line_status` with the expression `L_LINESTATUS` reads the `L_LINESTATUS`
 column, and one with `"L_LINESTATUS" IS NULL` reads no column of its own but a
 condition over one. The `SNOWFLAKE` dialect is used when a field has it, then
-`ANSI_SQL`. `ossie_ontology.expr.sql` parses the scalar subset a row-level
+`ANSI_SQL`, then `OSSIE_SQL_2026`; only a field with none of them is read in
+the first dialect listed. `ossie_ontology.expr.sql` parses the scalar subset a row-level
 field needs — columns (quoted or not), literals, `NULL`, arithmetic, `||`,
 comparisons, `IS [NOT] NULL`, `AND`/`OR`/`NOT` — and the conversion renders it
 as PyRel over the table. A condition becomes a Boolean asserted `TRUE` on the
