@@ -514,19 +514,15 @@ class OssietoOBML:
         """
         name = field["name"]
 
-        # Get expression (prefer ANSI_SQL dialect)
+        # Get expression: the most preferred SQL dialect, as for metrics, then
+        # the first dialect listed, then the field name.
         expr_obj = field.get("expression", {})
         code = name  # fallback
         if isinstance(expr_obj, dict):
-            dialects = expr_obj.get("dialects", [])
-            for d in dialects:
-                if d.get("dialect") == "ANSI_SQL":
-                    code = d.get("expression", name)
-                    break
-            if not dialects:
-                code = name
-            elif code == name and dialects:
-                code = dialects[0].get("expression", name)
+            code, _dialect = self._select_sql_expression(expr_obj)
+            if not code:
+                dialects = expr_obj.get("dialects", [])
+                code = dialects[0].get("expression", name) if dialects else name
 
         # An OBML-origin field additionally restores its exact `abstractType`
         # from the stashed extension below, keeping OBML -> Ossie -> OBML
