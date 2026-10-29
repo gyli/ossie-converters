@@ -774,6 +774,49 @@ class TestConvertOssieToSnowflake:
         assert result["metrics"][0]["expr"] == "SUM(x)"
         assert "data_type" not in result["metrics"][0]
 
+    def test_dataset_metrics_become_table_metrics(self):
+        model = _minimal_model()
+        model["datasets"][0]["metrics"] = [
+            {
+                "name": "col1_count",
+                "expression": {
+                    "dialects": [
+                        {"dialect": "ANSI_SQL", "expression": "COUNT(col1)"}
+                    ]
+                },
+                "description": "Rows with col1",
+                "ai_context": {"synonyms": ["col1 rows"]},
+                "datatype": "Integer",
+            }
+        ]
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            result = yaml.safe_load(convert_ossie_to_snowflake(_wrap_ossie(model)))
+
+        assert result["tables"][0]["metrics"] == [
+            {
+                "name": "col1_count",
+                "expr": "COUNT(col1)",
+                "description": "Rows with col1",
+                "synonyms": ["col1 rows"],
+            }
+        ]
+        assert "metrics" not in result
+
+    def test_dataset_and_model_metrics_are_kept_apart(self):
+        def metric(name, sql):
+            return {
+                "name": name,
+                "expression": {"dialects": [{"dialect": "ANSI_SQL", "expression": sql}]},
+            }
+
+        model = _minimal_model(metrics=[metric("model_total", "COUNT(my_table.col1)")])
+        model["datasets"][0]["metrics"] = [metric("table_total", "COUNT(col1)")]
+        result = yaml.safe_load(convert_ossie_to_snowflake(_wrap_ossie(model)))
+
+        assert [m["name"] for m in result["tables"][0]["metrics"]] == ["table_total"]
+        assert [m["name"] for m in result["metrics"]] == ["model_total"]
+
     def test_invalid_yaml_root_raises(self):
         with pytest.raises(OssieConversionError, match="expected a mapping"):
             convert_ossie_to_snowflake("- a list")

@@ -251,6 +251,19 @@ def _convert_dataset(dataset):
         if facts:
             result["facts"] = facts
 
+    # Dataset-scoped metrics -> table-level metrics. Their expressions reference
+    # the dataset's own fields by single-part name, which are this table's
+    # dimensions and facts under the same names.
+    dataset_metrics = dataset.get("metrics")
+    if dataset_metrics:
+        converted_metrics = []
+        for m in dataset_metrics:
+            converted = _convert_named_expr(m, "metric")
+            if converted is not None:
+                converted_metrics.append(converted)
+        if converted_metrics:
+            result["metrics"] = converted_metrics
+
     dropped_ai = []
     if isinstance(ai_context, dict):
         non_synonym_keys = [k for k in ai_context if k != "synonyms"]
