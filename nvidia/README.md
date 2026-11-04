@@ -276,7 +276,8 @@ is still carried through verbatim, and only the parse-derived enrichment
 model that imported cleanly can always be exported again. On
 Auto Ontology → Ossie, expressions are labelled with the source connection's
 dialect when Ossie names it (`SNOWFLAKE`, `DATABRICKS`, `BIGQUERY`) and
-`ANSI_SQL` otherwise.
+`ANSI_SQL` otherwise. On Ossie → Auto Ontology, each expression is read in
+`ANSI_SQL`, else `OSSIE_SQL_2026`, else the first dialect listed.
 
 For an Ossie-origin model there is no Auto Ontology catalog to check against,
 so physical columns are synthesized from the identifiers in each expression.

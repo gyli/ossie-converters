@@ -2035,10 +2035,17 @@ def _normalize_expressions(value: Any, name: str) -> list[dict[str, str]]:
     return result
 
 
+# Portable dialects, in order of preference. OSSIE_SQL_2026 is the spec's own
+# portable expression language and parses the same as ANSI_SQL, so it is read
+# wherever ANSI_SQL is, ahead of any vendor dialect.
+_PORTABLE_DIALECTS = ("ANSI_SQL", "OSSIE_SQL_2026")
+
+
 def _pick_expression(expressions: list[dict[str, str]], name: str) -> str:
-    for expression in expressions:
-        if expression["dialect"].upper() == "ANSI_SQL":
-            return expression["expression"]
+    for dialect in _PORTABLE_DIALECTS:
+        for expression in expressions:
+            if expression["dialect"].upper() == dialect:
+                return expression["expression"]
     if expressions:
         return expressions[0]["expression"]
     raise AutoOntologyConversionError(f"{name!r} has no usable expression")

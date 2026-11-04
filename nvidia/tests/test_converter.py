@@ -1691,6 +1691,55 @@ def test_dialects_ossie_cannot_name_stay_ansi() -> None:
     assert net_total["expression"]["dialects"][0]["dialect"] == "ANSI_SQL"
 
 
+def _ansi_text(expression: dict[str, Any]) -> str:
+    return next(d["expression"] for d in expression["dialects"] if d["dialect"] == "ANSI_SQL")
+
+
+def _expression_dicts(model: dict[str, Any]) -> list[dict[str, Any]]:
+    expressions = [
+        field["expression"]
+        for dataset in model["datasets"]
+        for field in dataset.get("fields") or []
+    ]
+    expressions += [metric["expression"] for metric in model.get("metrics") or []]
+    return expressions
+
+
+def test_ossie_sql_is_read_ahead_of_a_vendor_dialect() -> None:
+    """OSSIE_SQL_2026 is the spec's portable dialect. An expression listed as
+    [SNOWFLAKE, OSSIE_SQL_2026] must export its portable text, exactly as the
+    same text tagged ANSI_SQL does, not whichever entry happens to be first."""
+    ansi = yaml.safe_load(_ossie_yaml())
+    portable = deepcopy(ansi)
+    for expression in _expression_dicts(portable):
+        sql = _ansi_text(expression)
+        expression["dialects"] = [
+            {"dialect": "SNOWFLAKE", "expression": f"snowflake_only_{len(sql)}"},
+            {"dialect": "OSSIE_SQL_2026", "expression": sql},
+        ]
+
+    expected = yaml.safe_load(convert_ossie_to_auto_ontology(_ossie_yaml()))
+    actual = yaml.safe_load(convert_ossie_to_auto_ontology(yaml.safe_dump(portable)))
+
+    assert actual == expected
+    assert "snowflake_only" not in yaml.safe_dump(actual)
+
+
+def test_ansi_sql_is_read_ahead_of_ossie_sql() -> None:
+    ossie = yaml.safe_load(_ossie_yaml())
+    for expression in _expression_dicts(ossie):
+        sql = _ansi_text(expression)
+        expression["dialects"] = [
+            {"dialect": "OSSIE_SQL_2026", "expression": f"ossie_only_{len(sql)}"},
+            {"dialect": "ANSI_SQL", "expression": sql},
+        ]
+
+    expected = yaml.safe_load(convert_ossie_to_auto_ontology(_ossie_yaml()))
+    actual = yaml.safe_load(convert_ossie_to_auto_ontology(yaml.safe_dump(ossie)))
+
+    assert actual == expected
+
+
 @pytest.mark.parametrize("datatype", sorted(_SQL_TYPE_BY_OSSIE_DATATYPE))
 def test_every_mappable_datatype_survives_a_round_trip(datatype: str) -> None:
     ossie = yaml.safe_load(_ossie_yaml())
