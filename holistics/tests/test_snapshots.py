@@ -660,6 +660,72 @@ def test_a_non_default_relationship_property_is_written_back():
     assert "rlp_propagation: 'one_way'" in text
 
 
+RELATIONSHIP_FORMS = {
+    "short form": ({}, "relationship(users.order_id > orders.id, true)"),
+    "config block": ({"direction": "one_way"}, "from: ref('users', 'order_id')"),
+    "named declaration": (
+        {
+            "where": {
+                "__type__": "RelationshipFilter",
+                "from": {"__type__": "Heredoc", "name": "aql", "content": "users.id > 0"},
+            }
+        },
+        "from: ref('users', 'order_id')",
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "stashed,expected", RELATIONSHIP_FORMS.values(), ids=list(RELATIONSHIP_FORMS)
+)
+def test_a_relationship_joins_a_renamed_field_by_its_aml_name(stashed, expected):
+    """`from_columns` and `to_columns` name Ossie fields.
+
+    A field whose name is not a legal AML identifier is declared under its
+    sanitized spelling, so a relationship over it must use that spelling too,
+    or it references a dimension that does not exist.
+    """
+    document = _with_relationship_stash(**stashed) if stashed else _two_dataset_document([])
+    users = document["datasets"][1]
+    users["fields"][1]["name"] = "order-id"
+    document["relationships"][0]["from_columns"] = ["order-id"]
+
+    result = ossie_to_aml.convert(document, "ANSI_SQL", data_source_name="probe")
+    files = dict(result.files)
+    dataset = next(text for name, text in files.items() if name.endswith(".dataset.aml"))
+    model = next(text for name, text in files.items() if name.endswith("users.model.aml"))
+
+    assert "dimension order_id {" in model
+    assert expected in dataset
+    assert "order-id" not in dataset
+
+
+@needs_cli
+def test_a_relationship_over_a_renamed_field_compiles_to_that_field(tmp_path):
+    """The raw name compiled without error into the wrong join.
+
+    AML read `users.order-id` as model `users.order`, field `id`, and
+    `aml validate` did not flag it, so only the compiled reference shows the
+    join lands on the declared dimension.
+    """
+    document = _two_dataset_document([])
+    document["datasets"][1]["fields"][1]["name"] = "order-id"
+    document["relationships"][0]["from_columns"] = ["order-id"]
+    result = ossie_to_aml.convert(document, "ANSI_SQL", data_source_name="probe")
+    _write(dict(result.files), tmp_path)
+
+    completed = subprocess.run(
+        [HOLISTICS_CLI, "aml", "compile", "m.dataset.aml", "-r", ".", "-o", str(tmp_path / "out")],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    payload = json.loads((tmp_path / "out" / "m.dataset.aml.json").read_text(encoding="utf-8"))
+    joined = payload["relationships"][0]["rel"]["from"]
+    assert (joined["model"], joined["field"]) == ("users", "order_id")
+
+
 MATCH_RELATIONSHIPS = {
     "many_to_many": "ManyToManyRelationship",
     "range": "RangeRelationship",

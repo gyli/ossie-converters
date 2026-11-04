@@ -953,6 +953,11 @@ class _Reverse:
                 f"{len(to_columns)} to_columns. AML joins a column to a column, so the "
                 f"two lists must be the same length and must not be empty"
             )
+        # The columns name Ossie fields; the dimensions they join were declared
+        # under their AML spelling, so reference them by that spelling too.
+        scope = f"relationship {name}"
+        from_columns = [self.name_in_aml(str(column), scope) for column in from_columns]
+        to_columns = [self.name_in_aml(str(column), scope) for column in to_columns]
 
         extra = self._relationship_properties(data, name)
         where = data.get("where")
