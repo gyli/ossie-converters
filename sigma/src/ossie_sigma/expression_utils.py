@@ -80,11 +80,18 @@ def sigma_dialect_text(expression: OssieExpression) -> Optional[str]:
     return None
 
 
+# Portable SQL dialects, in order of preference. ``OSSIE_SQL_2026`` is the spec's own
+# portable expression language and parses the same as ``ANSI_SQL``, so it is read
+# wherever ``ANSI_SQL`` is.
+_PORTABLE_SQL_DIALECTS = (OssieDialect.ANSI_SQL, OssieDialect.OSSIE_SQL_2026)
+
+
 def ansi_sql_text(expression: OssieExpression) -> Optional[str]:
-    """Return the ``ANSI_SQL`` dialect entry from *expression*, if present."""
-    for dialect_expr in expression.dialects:
-        if dialect_expr.dialect == OssieDialect.ANSI_SQL:
-            return dialect_expr.expression
+    """Return the portable SQL entry from *expression*: ``ANSI_SQL``, else ``OSSIE_SQL_2026``."""
+    for dialect in _PORTABLE_SQL_DIALECTS:
+        for dialect_expr in expression.dialects:
+            if dialect_expr.dialect == dialect:
+                return dialect_expr.expression
     return None
 
 

@@ -33,6 +33,7 @@ from ossie import OssieRelationship
 from pydantic import ValidationError
 
 from ossie_sigma.converter_issues import ConverterIssueType
+from ossie_sigma.expression_utils import ansi_sql_text
 from ossie_sigma.ossie_to_sigma import OssieToSigmaConverter, _stable_id
 from ossie_sigma.sigma_to_ossie import SigmaToOssieConverter
 
@@ -347,6 +348,61 @@ def test_null_returning_ansi_metrics_are_kept(sql, expected_formula):
 
     assert [m["formula"] for m in element.get("metrics", [])] == [expected_formula]
     assert not any(i.issue_type is ConverterIssueType.EXPRESSION_NOT_TRANSLATABLE for i in result.issues)
+
+
+def _one_dataset_document(*dialects):
+    """One field and one single-dataset metric, each written in *dialects* (same text)."""
+
+    def expression(sql):
+        return OssieExpression(
+            dialects=[OssieDialectExpression(dialect=dialect, expression=sql) for dialect in dialects]
+        )
+
+    return OssieDocument(
+        name="m",
+        datasets=[
+            OssieDataset(
+                name="orders",
+                source="db.public.orders",
+                fields=[OssieField(name="amount", expression=expression("amount"))],
+            )
+        ],
+        metrics=[OssieMetric(name="total_amount", expression=expression("SUM(orders.amount)"))],
+    )
+
+
+@pytest.mark.parametrize(
+    "dialects",
+    [
+        (OssieDialect.OSSIE_SQL_2026,),
+        (OssieDialect.SNOWFLAKE, OssieDialect.OSSIE_SQL_2026),
+    ],
+    ids=["ossie-sql-only", "vendor-dialect-first"],
+)
+def test_ossie_sql_expressions_convert_like_ansi_sql(dialects):
+    """OSSIE_SQL_2026 is the spec's portable dialect, so an expression written in it
+    must reach the Sigma spec exactly as the same expression tagged ANSI_SQL does,
+    instead of the field being dropped as not translatable and the metric as
+    cross-dataset."""
+    expected = OssieToSigmaConverter().convert(_one_dataset_document(OssieDialect.ANSI_SQL))
+    result = OssieToSigmaConverter().convert(_one_dataset_document(*dialects))
+
+    element = result.output["pages"][0]["elements"][0]
+    expected_element = expected.output["pages"][0]["elements"][0]
+    assert element["columns"] == expected_element["columns"]
+    assert element["metrics"] == expected_element["metrics"]
+    assert [m["name"] for m in element["metrics"]] == ["total_amount"]
+    assert result.issues == []
+
+
+def test_ansi_sql_is_preferred_over_ossie_sql():
+    expression = OssieExpression(
+        dialects=[
+            OssieDialectExpression(dialect=OssieDialect.OSSIE_SQL_2026, expression="ossie_amount"),
+            OssieDialectExpression(dialect=OssieDialect.ANSI_SQL, expression="ansi_amount"),
+        ]
+    )
+    assert ansi_sql_text(expression) == "ansi_amount"
 
 
 def test_synthesized_spec_carries_a_schema_version():
