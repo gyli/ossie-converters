@@ -563,8 +563,10 @@ def _build_call(node: FuncCall, dataset_alias: Optional[str]) -> exp.Expression:
     if name == "isnotnull" and len(args) == 1:
         return exp.Not(this=exp.Is(this=built[0], expression=exp.Null()))
 
+    # No ELSE, like the other *If aggregates: a group where no row matches gets
+    # NULL, as SUM over no rows does, and as SUM(x) FILTER (WHERE c) does.
     if name == "sumif" and len(args) >= 2:
-        return exp.Sum(this=_case(exp.and_(*built[1:]), built[0], exp.Literal.number(0)))
+        return exp.Sum(this=_case(exp.and_(*built[1:]), built[0], None))
     if name == "countif" and len(args) >= 1:
         return exp.Count(this=_case(exp.and_(*built), exp.Literal.number(1), None))
     if name == "countdistinctif" and len(args) >= 2:
