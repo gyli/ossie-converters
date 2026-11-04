@@ -326,6 +326,59 @@ def test_unresolved_metric_attaches_to_first_dataset():
     ]
 
 
+def test_dataset_metric_becomes_a_measure_on_its_own_table():
+    """A dataset-scoped metric belongs to the dataset that declares it, so it
+    lands on that table, not the first one, and needs no placement."""
+    from ossie import OssieMetric
+
+    document = OssieDocument(
+        name="m",
+        datasets=[
+            OssieDataset(name="a", source="db.s.a"),
+            OssieDataset(
+                name="b",
+                source="db.s.b",
+                fields=[OssieField(name="amount", expression=_snowflake("amount"))],
+                metrics=[
+                    OssieMetric(name="total_amount", expression=_snowflake("SUM(amount)"), description="All amounts")
+                ],
+            ),
+        ],
+    )
+    result = OssieToWisdomConverter().convert(document, exported_at="2026-07-10T00:00:00+00:00")
+
+    assert "measures" not in _table(result.output, "a")
+    (measure,) = _table(result.output, "b")["measures"]
+    assert measure["name"] == "total_amount"
+    assert measure["expression"] == "SUM(amount)"
+    assert measure["description"] == "All amounts"
+    assert measure["location"]["zsheetRef"]["name"] == "b"
+    assert result.issues == []
+
+
+def test_dataset_metric_drops_are_reported():
+    from ossie import OssieCustomExtension, OssieMetric
+
+    metric = OssieMetric(
+        name="total_amount",
+        expression=_snowflake("SUM(amount)"),
+        ai_context="money in",
+        custom_extensions=[OssieCustomExtension(vendor_name="OTHER", data="{}")],
+    )
+    document = OssieDocument(
+        name="m",
+        datasets=[OssieDataset(name="b", source="db.s.b", metrics=[metric])],
+    )
+    result = OssieToWisdomConverter().convert(document, exported_at="2026-07-10T00:00:00+00:00")
+
+    assert [issue.element_name for issue in _issues_of(result, ConverterIssueType.AI_CONTEXT_DROPPED)] == [
+        "b.total_amount"
+    ]
+    assert [issue.element_name for issue in _issues_of(result, ConverterIssueType.CUSTOM_EXTENSION_DROPPED)] == [
+        "b.total_amount"
+    ]
+
+
 def test_field_only_ossie_sql_2026_is_exported_without_missing_issue():
     """A field expressed only in OSSIE_SQL_2026 is exported, with no spurious
     MISSING_DIALECT_EXPRESSION issue (#442)."""
