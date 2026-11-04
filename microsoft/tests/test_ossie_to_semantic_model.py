@@ -510,6 +510,15 @@ def test_temporal_types_power_bi_lacks_are_reported(datatype, expected):
     assert _column(_table(bim, "T"), "C")["dataType"] == "dateTime"
 
 
+def test_decimal_precision_loss_is_reported():
+    semantic_model = _minimal()
+    semantic_model["datasets"][0]["fields"][0]["datatype"] = "Decimal"
+    with pytest.warns(UserWarning, match="Fixed Decimal Number, which keeps 4 decimal places"):
+        bim = _convert(semantic_model)
+    # The mapping itself is unchanged; only the loss is now reported.
+    assert _column(_table(bim, "T"), "C")["dataType"] == "decimal"
+
+
 def test_an_opaque_field_leaves_the_data_type_unspecified():
     semantic_model = _minimal()
     semantic_model["datasets"][0]["fields"][0]["datatype"] = "Opaque"
