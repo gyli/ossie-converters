@@ -37,6 +37,8 @@ from pathlib import Path
 
 import pytest
 
+from ossie_ontology.expr.sql import Column
+from ossie_ontology.model import DatasetField, DialectExpression, DialectExpressionSet
 from ossie_ontology.parser import OssieParser
 
 pyrel = pytest.importorskip(
@@ -52,6 +54,7 @@ from ossie_relationalai import (  # noqa: E402
     OssieToRelationalAIConverter,
     declared_table,
 )
+from ossie_relationalai.fields import field_sql  # noqa: E402
 
 # The columns of Snowflake's SNOWFLAKE_SAMPLE_DATA.TPCH_SF1 tables, as the
 # warehouse reports them. AutoOntologyTPCH names its fields after what they
@@ -178,6 +181,23 @@ def test_each_expression_shape_renders_as_pyrel(behaviours_dir: Path):
     assert "(False))" not in source
 
     assert_executable(source, "field_expressions")
+
+
+@pytest.mark.parametrize("dialects, read", [
+    # OSSIE_SQL_2026 is the spec's portable dialect: read ahead of any dialect
+    # RelationalAI does not run, whatever the order they are listed in.
+    (["DATABRICKS", "OSSIE_SQL_2026"], "ossie_col"),
+    (["BIGQUERY", "OSSIE_SQL_2026"], "ossie_col"),
+    (["OSSIE_SQL_2026", "ANSI_SQL"], "ansi_col"),
+    (["OSSIE_SQL_2026", "SNOWFLAKE"], "snowflake_col"),
+])
+def test_a_field_is_read_in_snowflake_then_portable_sql(dialects: list[str], read: str):
+    column = {"SNOWFLAKE": "snowflake_col", "ANSI_SQL": "ansi_col", "OSSIE_SQL_2026": "ossie_col",
+              "DATABRICKS": "databricks_col", "BIGQUERY": "bigquery_col"}
+    field = DatasetField(name="status", expression=DialectExpressionSet(
+        dialects=[DialectExpression(dialect=d, expression=column[d]) for d in dialects]))
+
+    assert field_sql(field) == Column(read)
 
 
 @pytest.mark.parametrize("expression, holds", [
