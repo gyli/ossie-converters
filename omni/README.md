@@ -110,14 +110,14 @@ specific to **export** (Ossie -> Omni) or **import** (Omni -> Ossie).
 | `dataset.source` `catalog.schema.table` / `schema.table` | view `catalog` + `schema` + `table_name` | `table_name` left implicit when it matches the file name; a part that is not a plain identifier is double-quoted (`"Omni Views".upload`). |
 | `dataset.source` `SELECT ...` | view `sql:` | A SQL-defined view. |
 | `dataset.description` / `ai_context.instructions` | view `description` / `ai_context` | |
-| `dataset.primary_key` (single) | `primary_key: true` on the matching dimension | Export: a key column no field covers becomes a hidden dimension. |
+| `dataset.primary_key` (single) | `primary_key: true` on the matching dimension | Keys name fields, not source columns. Import: the key is the dimension's name. Export: a key is read as a field name first; a key that names a column a field reads (written by earlier imports) is still accepted, and a key no field covers becomes a hidden dimension. |
 | `dataset.primary_key` (composite) | view `custom_compound_primary_key_sql` | Import: `${view.field}` entries resolve to plain field names (original list stashed); multiple `primary_key: true` dimensions also form a composite key. |
 | field | dimension | Export: an already-valid Omni identifier (incl. `_fivetran_id`, `..._day_`, camelCase) passes through; anything else sanitizes to `[a-z][a-z0-9_]*`. A case-insensitive collision is an error. |
 | `field.expression` | dimension `sql` | Export: a bare column named like the field emits `{}` (the schema-layer default); import translates `${field}`/`${view.field}`/`${TABLE}.col` references and stashes the original `sql`. |
 | `field.dimension.is_time` | dimension `timeframes` | Export: the Omni default list; import stashes the exact list. |
 | `field.label` / `description` | `label` / `description` | |
 | `field.ai_context` synonyms / instructions | `synonyms` / `ai_context` | |
-| relationship | `relationships.yaml` entry | `from`(many) -> `join_from_view`, `to`(one) -> `join_to_view`, columns -> `on_sql` equi-join. Declared `join_type`/`relationship_type` (even Omni defaults) and any `on_sql` the rebuild would not reproduce (aliases, `and` casing, spacing) are stashed verbatim. |
+| relationship | `relationships.yaml` entry | `from`(many) -> `join_from_view`, `to`(one) -> `join_to_view`, columns -> `on_sql` equi-join. `from_columns`/`to_columns` are the field names in `${view.field}`. Declared `join_type`/`relationship_type` (even Omni defaults) and any `on_sql` the rebuild would not reproduce (aliases, `and` casing, spacing) are stashed verbatim. |
 | `relationship.name` | -- | Regenerated as `<from>_to_<to>` on import (suffixed `_2`, `_3`, ... when several joins share a view pair). |
 | metric | measure on the view its expression references (else the base view) | `AGG(view.field)` <-> `aggregate_type` + `sql: ${field}`; `COUNT(*)` <-> `aggregate_type: count`; anything else <-> a raw-`sql` measure. |
 | `metric.description` / `ai_context` | measure `description` / `synonyms` / `ai_context` | |

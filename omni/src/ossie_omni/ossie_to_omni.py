@@ -286,6 +286,7 @@ def _convert_dataset(ds, vname, view_names, dialect):
 
     dimensions = {}
     col_to_dim = {}
+    field_to_dim = {}
     taken = set()
     for field in ds.get("fields", []) or []:
         fname = require_str(field, "name", f"{scope}: field")
@@ -299,6 +300,7 @@ def _convert_dataset(ds, vname, view_names, dialect):
             continue
         dim = _convert_field(field, dname, expr, fscope)
         dimensions[dname] = dim
+        field_to_dim[fname] = dname
         if is_simple_identifier(expr):
             col_to_dim[expr.strip()] = dname
 
@@ -313,10 +315,11 @@ def _convert_dataset(ds, vname, view_names, dialect):
     elif pk:
         pk_dims = []
         for col in pk:
-            # A key entry is either a raw column some dimension covers, or
-            # already a dimension name (import resolves a computed dimension's
-            # key to its field name).
-            dname = col_to_dim.get(col) or (col if col in dimensions else None)
+            # A key entry names a field of the dataset (core spec, Name
+            # Resolution). A raw column some dimension covers is still
+            # accepted, as written by imports that predate that rule.
+            dname = (field_to_dim.get(col) or col_to_dim.get(col)
+                     or (col if col in dimensions else None))
             if dname is None:
                 dname = sanitize_name(col, f"{scope}: primary key column", taken)
                 taken.add(dname.lower())

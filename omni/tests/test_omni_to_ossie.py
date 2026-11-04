@@ -141,11 +141,18 @@ def test_omni_only_dimension_params_stash():
                            "group_label": "Money"}
 
 
-def test_compound_primary_key_resolves_to_columns():
+def test_compound_primary_key_names_fields():
+    # Keys name fields of the dataset, not source columns (core spec, Name
+    # Resolution), so `line` stays `line` although it reads `line_no`.
     files = minimal_files(
         custom_compound_primary_key_sql=["id", "line"],
         dimensions={"id": {}, "line": {"sql": "line_no"}})
-    assert dataset(imp(files), "orders")["primary_key"] == ["id", "line_no"]
+    assert dataset(imp(files), "orders")["primary_key"] == ["id", "line"]
+
+
+def test_primary_key_names_the_field_not_its_column():
+    files = minimal_files(dimensions={"order_id": {"sql": "ORDER_KEY", "primary_key": True}})
+    assert dataset(imp(files), "orders")["primary_key"] == ["order_id"]
 
 
 def test_view_extras_stash():
@@ -202,7 +209,7 @@ def test_composite_on_sql_decomposes_in_order():
     assert rel["to_columns"] == ["b", "d"]
 
 
-def test_field_reference_in_on_sql_resolves_to_column():
+def test_field_reference_in_on_sql_names_the_field():
     files = {
         "views/orders.view.yaml": dump_yaml(
             {"schema": "s",
@@ -215,7 +222,11 @@ def test_field_reference_in_on_sql_resolves_to_column():
              "relationship_type": "many_to_one"}]),
     }
     rel = imp(files)["relationships"][0]
-    assert rel["from_columns"] == ["user_id_raw"]
+    # from_columns/to_columns name fields (core spec, Name Resolution).
+    assert rel["from_columns"] == ["user_key"]
+    assert rel["to_columns"] == ["id"]
+    # Export rebuilds the same on_sql from the field names, so none is stashed.
+    assert "on_sql" not in stash_of(rel)
 
 
 def test_non_equi_join_is_stashed_not_converted():
