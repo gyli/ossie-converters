@@ -182,6 +182,9 @@ OBML, but are not interpreted by other Ossie consumers:
   to Ossie roundtrip stays lossless. A `LOSSY:` warning is raised for each such
   metric because it is **not queryable through OBML**. SQL expressions in the
   `ANSI_SQL`, `OSSIE_SQL_2026`, `SNOWFLAKE`, and `DATABRICKS` dialects are all read on import.
+- **Field expressions** - a field's column `code` is read from the same SQL dialects,
+  in the same order (`ANSI_SQL`, `OSSIE_SQL_2026`, `SNOWFLAKE`, `DATABRICKS`). Only a
+  field with none of them falls back to its first listed dialect.
 
 Ossie v0.1.x inputs are accepted on read via a legacy normalization shim; output
 targets Ossie **v0.2.0.dev0**.
