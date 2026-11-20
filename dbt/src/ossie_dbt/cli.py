@@ -62,6 +62,18 @@ _ISSUE_REASON: dict[ConverterIssueType, str] = {
         "MetricFlow SIMPLE metrics require one supported aggregation over a safe scalar expression "
         "owned by exactly one semantic model"
     ),
+    ConverterIssueType.INVALID_DBT_CUSTOM_EXTENSION: (
+        "its DBT custom_extensions data is not a JSON object, or its meta is not an object, "
+        "so config.meta could not be restored"
+    ),
+    ConverterIssueType.DUPLICATE_DBT_CUSTOM_EXTENSION: (
+        "more than one DBT custom_extensions entry carried meta, so only the first "
+        "was restored to config.meta"
+    ),
+    ConverterIssueType.DUPLICATE_METRIC_NAME_DROPPED: (
+        "MetricFlow metric names are unique across the manifest, and a model-level metric or another "
+        "dataset's metric already uses this name; rename one of them"
+    ),
 }
 
 _DROPPED_ISSUE_TYPES = {
@@ -72,6 +84,7 @@ _DROPPED_ISSUE_TYPES = {
     ConverterIssueType.AMBIGUOUS_REFERENCE_METRIC_DROPPED,
     ConverterIssueType.UNSUPPORTED_METRIC_EXPRESSION,
     ConverterIssueType.NON_PORTABLE_METRIC_SEMANTICS,
+    ConverterIssueType.DUPLICATE_METRIC_NAME_DROPPED,
 }
 
 
